@@ -31,99 +31,6 @@
 #define DAG_MAX_BOARDS 32
 #endif
 
-
-#ifndef ERF_TYPE_AAL5
-#define ERF_TYPE_AAL5               4
-#endif
-
-#ifndef ERF_TYPE_MC_HDLC
-#define ERF_TYPE_MC_HDLC            5
-#endif
-
-#ifndef ERF_TYPE_MC_RAW
-#define ERF_TYPE_MC_RAW             6
-#endif
-
-#ifndef ERF_TYPE_MC_ATM
-#define ERF_TYPE_MC_ATM             7
-#endif
-
-#ifndef ERF_TYPE_MC_RAW_CHANNEL
-#define ERF_TYPE_MC_RAW_CHANNEL     8
-#endif
-
-#ifndef ERF_TYPE_MC_AAL5
-#define ERF_TYPE_MC_AAL5            9
-#endif
-
-#ifndef ERF_TYPE_COLOR_HDLC_POS
-#define ERF_TYPE_COLOR_HDLC_POS     10
-#endif
-
-#ifndef ERF_TYPE_COLOR_ETH
-#define ERF_TYPE_COLOR_ETH          11
-#endif
-
-#ifndef ERF_TYPE_MC_AAL2
-#define ERF_TYPE_MC_AAL2            12
-#endif
-
-#ifndef ERF_TYPE_IP_COUNTER
-#define ERF_TYPE_IP_COUNTER         13
-#endif
-
-#ifndef ERF_TYPE_TCP_FLOW_COUNTER
-#define ERF_TYPE_TCP_FLOW_COUNTER   14
-#endif
-
-#ifndef ERF_TYPE_DSM_COLOR_HDLC_POS
-#define ERF_TYPE_DSM_COLOR_HDLC_POS 15
-#endif
-
-#ifndef ERF_TYPE_DSM_COLOR_ETH
-#define ERF_TYPE_DSM_COLOR_ETH      16
-#endif
-
-#ifndef ERF_TYPE_COLOR_MC_HDLC_POS
-#define ERF_TYPE_COLOR_MC_HDLC_POS  17
-#endif
-
-#ifndef ERF_TYPE_COLOR_HASH_POS
-#define ERF_TYPE_COLOR_HASH_POS     19
-#endif
-
-#ifndef ERF_TYPE_COLOR_HASH_ETH
-#define ERF_TYPE_COLOR_HASH_ETH     20
-#endif
-
-#ifndef ERF_TYPE_INFINIBAND
-#define ERF_TYPE_INFINIBAND         21
-#endif
-
-#ifndef ERF_TYPE_IPV4
-#define ERF_TYPE_IPV4               22
-#endif
-
-#ifndef ERF_TYPE_IPV6
-#define ERF_TYPE_IPV6               23
-#endif
-
-#ifndef ERF_TYPE_RAW_LINK
-#define ERF_TYPE_RAW_LINK           24
-#endif
-
-#ifndef ERF_TYPE_INFINIBAND_LINK
-#define ERF_TYPE_INFINIBAND_LINK    25
-#endif
-
-#ifndef ERF_TYPE_META
-#define ERF_TYPE_META               27
-#endif
-
-#ifndef ERF_TYPE_PAD
-#define ERF_TYPE_PAD                48
-#endif
-
 #define ATM_CELL_SIZE		52
 #define ATM_HDR_SIZE		4
 
@@ -178,13 +85,6 @@ static int atexit_handler_installed = 0;
 #define MAX_DAG_PACKET 65536
 
 static unsigned char TempPkt[MAX_DAG_PACKET];
-
-#ifndef HAVE_DAG_LARGE_STREAMS_API
-#define dag_attach_stream64(a, b, c, d) dag_attach_stream(a, b, c, d)
-#define dag_get_stream_poll64(a, b, c, d, e) dag_get_stream_poll(a, b, c, d, e)
-#define dag_set_stream_poll64(a, b, c, d, e) dag_set_stream_poll(a, b, c, d, e)
-#define dag_size_t uint32_t
-#endif
 
 static int dag_stats(pcap_t *p, struct pcap_stat *ps);
 static int dag_set_datalink(pcap_t *p, int dlt);
@@ -1103,6 +1003,36 @@ dag_stats(pcap_t *p, struct pcap_stat *ps) {
 	return 0;
 }
 
+static const char *
+dag_device_description(const unsigned dagid)
+{
+	static char buf[128];
+	snprintf(buf, sizeof(buf), "alias for dag%u:0", dagid);
+	return buf;
+}
+
+static const char *
+dag_stream_short_description(const unsigned stream)
+{
+	static char buf[128];
+	snprintf(buf, sizeof(buf), "Rx stream %u", stream);
+	return buf;
+}
+
+static const char *
+dag_stream_long_description(const unsigned stream, const dag_size_t bufsize,
+    const dag_card_inf_t * inf)
+{
+	static char buf[256];
+	snprintf(buf, sizeof(buf),
+	    "Rx stream %u, size: %" PRIu64 " MiB, bus: %s, name: %s",
+	    stream,
+	    bufsize / 1024 / 1024,
+	    inf ? inf->bus_id : "N/A",
+	    inf ? dag_device_name(inf->device_code, 0) : "N/A");
+	return buf;
+}
+
 /*
  * Add all DAG devices.
  */
@@ -1114,8 +1044,7 @@ dag_findalldevs(pcap_if_list_t *devlistp, char *errbuf)
 	char dagname[DAGNAME_BUFSIZE];
 	int dagstream;
 	int dagfd;
-	dag_card_inf_t *inf;
-	char *description;
+	const char * description;
 	int stream, rxstreams;
 	// A DAG card associates a link status with each physical port, but not
 	// with the data streams.  The number of ports is a matter of hardware,
@@ -1136,15 +1065,9 @@ dag_findalldevs(pcap_if_list_t *devlistp, char *errbuf)
 			return PCAP_ERROR;
 		}
 		if ( (dagfd = dag_open(dagname)) >= 0 ) {
-			description = NULL;
-			if ((inf = dag_pciinfo(dagfd)))
-				description = dag_device_name(inf->device_code, 1);
-			if (pcapint_add_dev(devlistp, name, flags, description, errbuf) == NULL) {
-				/*
-				 * Failure.
-				 */
-				return PCAP_ERROR;
-			}
+			// Do not add a shorthand device for stream 0 (dagN) yet -- the
+			// user can disable any stream in the card configuration.
+			const dag_card_inf_t * inf = dag_pciinfo(dagfd); // NULL is fine
 			rxstreams = dag_rx_get_stream_count(dagfd);
 			for(stream=0;stream<DAG_STREAM_MAX;stream+=2) {
 				if (0 == dag_attach_stream64(dagfd, stream, 0, 0)) {
@@ -1158,7 +1081,15 @@ dag_findalldevs(pcap_if_list_t *devlistp, char *errbuf)
 
 				// The Rx stream exists, whether already attached or not.
 				{
+					description = dag_device_description (c);
+					// a conditional shorthand device
+					if (stream == 0 &&
+					    pcapint_add_dev(devlistp, name, flags, description, errbuf) == NULL)
+						return PCAP_ERROR;
+					// and the stream device
 					snprintf(name,  sizeof(name), "dag%d:%d", c, stream);
+					description = dag_stream_long_description(stream,
+					    dag_get_stream_buffer_size64(dagfd, stream), inf);
 					if (pcapint_add_dev(devlistp, name, flags, description, errbuf) == NULL) {
 						/*
 						 * Failure.
@@ -1176,8 +1107,7 @@ dag_findalldevs(pcap_if_list_t *devlistp, char *errbuf)
 		} else if (errno == EACCES) {
 			// The device exists, but the current user privileges are not
 			// sufficient for dag_open().
-			if (! pcapint_add_dev(devlistp, name, flags, NULL, errbuf))
-				return PCAP_ERROR;
+			// Do not add a shorthand device for stream 0 yet -- same as above.
 			// Try enumerating the Rx streams using sysfs.  The file lists
 			// all streams (Rx and Tx) that have non-zero amount of buffer
 			// memory.
@@ -1188,8 +1118,16 @@ dag_findalldevs(pcap_if_list_t *devlistp, char *errbuf)
 				char linebuf[1024];
 				while (fgets(linebuf, sizeof(linebuf), info))
 					if (1 == sscanf(linebuf, "Stream %u:", &stream) && stream % 2 == 0) {
+						// a conditional shorthand device
+						description = dag_device_description(c);
+						if (stream == 0 &&
+						    pcapint_add_dev(devlistp, name, flags, description, errbuf) == NULL)
+							return PCAP_ERROR;
+						// and the stream device
 						snprintf(name,  sizeof(name), "dag%u:%u", c, stream);
-						if (! pcapint_add_dev(devlistp, name, flags, NULL, errbuf))
+						// TODO: Parse and describe the buffer size too.
+						description = dag_stream_short_description(stream);
+						if (pcapint_add_dev(devlistp, name, flags, description, errbuf) == NULL)
 							return PCAP_ERROR;
 					}
 				fclose(info);

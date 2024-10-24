@@ -1313,7 +1313,7 @@ AS_HELP_STRING([--with-dag@<:@=DIR@:>@],[include Endace DAG support (located in 
 		# User requested DAG-only libpcap, so we'd better have
 		# the DAG API.
 		want_dag=yes
-	elif test "xxx_only" = yes; then
+	elif test "$xxx_only" = yes; then
 		# User requested something-else-only pcap, so they don't
 		# want DAG support.
 		want_dag=no
@@ -1381,7 +1381,7 @@ if test "$want_dag" != no; then
 		# included if there's a found-action (arg 3).
 		AC_LBL_SAVE_CHECK_STATE
 		LDFLAGS="-L$dag_lib_dir"
-		AC_CHECK_LIB([dag], [dag_attach_stream],
+		AC_CHECK_LIB([dag], [dag_attach_stream64],
 		    [
 			#
 			# We assume that if we have libdag we have
@@ -1392,8 +1392,7 @@ if test "$want_dag" != no; then
 			ADDITIONAL_LIBS_STATIC="-L$dag_lib_dir $ADDITIONAL_LIBS_STATIC -ldag -ldagconf"
 			LIBS_PRIVATE="-L$dag_lib_dir $LIBS_PRIVATE -ldag -ldagconf"
 		    ],
-		    [AC_MSG_ERROR(DAG library lacks streams support)])
-		AC_CHECK_LIB([dag], [dag_attach_stream64], [dag_large_streams="1"], [dag_large_streams="0"])
+		    [AC_MSG_ERROR(DAG library lacks 64-bit streams support)])
 		AC_LBL_RESTORE_CHECK_STATE
 
 		#
@@ -1401,22 +1400,19 @@ if test "$want_dag" != no; then
 		# as they're installed at the same time from the same
 		# package.
 		#
-		if test "$dag_large_streams" = 1; then
-			AC_DEFINE(HAVE_DAG_LARGE_STREAMS_API, 1, [define if you have large streams capable DAG API])
-			AC_LBL_SAVE_CHECK_STATE
-			LIBS="$LIBS -ldag -ldagconf"
-			LDFLAGS="$LDFLAGS -L$dag_lib_dir"
-			AC_CHECK_LIB([vdag],[vdag_set_device_info], [ac_dag_have_vdag="1"], [ac_dag_have_vdag="0"])
-			AC_LBL_RESTORE_CHECK_STATE
-			if test "$ac_dag_have_vdag" = 1; then
-				AC_DEFINE(HAVE_DAG_VDAG, 1, [define if you have vdag_set_device_info()])
-				if test "$ac_lbl_have_pthreads" != "found"; then
-					AC_MSG_ERROR([DAG requires pthreads, but we didn't find them])
-				fi
-				ADDITIONAL_LIBS="$ADDITIONAL_LIBS $PTHREAD_LIBS"
-				ADDITIONAL_LIBS_STATIC="$ADDITIONAL_LIBS_STATIC $PTHREAD_LIBS"
-				LIBS_PRIVATE="$LIBS_PRIVATE $PTHREAD_LIBS"
+		AC_LBL_SAVE_CHECK_STATE
+		LIBS="$LIBS -ldag -ldagconf"
+		LDFLAGS="$LDFLAGS -L$dag_lib_dir"
+		AC_CHECK_LIB([vdag],[vdag_set_device_info], [ac_dag_have_vdag="1"], [ac_dag_have_vdag="0"])
+		AC_LBL_RESTORE_CHECK_STATE
+		if test "$ac_dag_have_vdag" = 1; then
+			AC_DEFINE(HAVE_DAG_VDAG, 1, [define if you have vdag_set_device_info()])
+			if test "$ac_lbl_have_pthreads" != "found"; then
+				AC_MSG_ERROR([DAG requires pthreads, but we didn't find them])
 			fi
+			ADDITIONAL_LIBS="$ADDITIONAL_LIBS $PTHREAD_LIBS"
+			ADDITIONAL_LIBS_STATIC="$ADDITIONAL_LIBS_STATIC $PTHREAD_LIBS"
+			LIBS_PRIVATE="$LIBS_PRIVATE $PTHREAD_LIBS"
 		fi
 
 		AC_DEFINE(HAVE_DAG_API, 1, [define if you have the DAG API])
@@ -1454,7 +1450,7 @@ AS_HELP_STRING([--with-septel@<:@=DIR@:>@],[include Septel support (located in d
 		# User requested Septel-only libpcap, so we'd better have
 		# the Septel API.
 		want_septel=yes
-	elif test "xxx_only" = yes; then
+	elif test "$xxx_only" = yes; then
 		# User requested something-else-only pcap, so they don't
 		# want Septel support.
 		want_septel=no
@@ -1533,7 +1529,7 @@ AS_HELP_STRING([--with-snf@<:@=DIR@:>@],[include Myricom SNF support (located in
 		# User requested Sniffer-only libpcap, so we'd better have
 		# the Sniffer API.
 		want_snf=yes
-	elif test "xxx_only" = yes; then
+	elif test "$xxx_only" = yes; then
 		# User requested something-else-only pcap, so they don't
 		# want SNF support.
 		want_snf=no
@@ -1642,7 +1638,7 @@ AS_HELP_STRING([--with-turbocap@<:@=DIR@:>@],[include Riverbed TurboCap support 
 		turbocap_root=$withval
 	fi
 ],[
-	if test "xxx_only" = yes; then
+	if test "$xxx_only" = yes; then
 		# User requested something-else-only pcap, so they don't
 		# want TurboCap support.
 		want_turbocap=no
@@ -2456,7 +2452,7 @@ AC_ARG_ENABLE([usb],
 # If somebody requested an XXX-only pcap, that doesn't include
 # additional mechanisms.
 #
-if test "xxx_only" != yes; then
+if test "$xxx_only" != yes; then
   case "$host_os" in
   linux*)
     dnl check for USB sniffing support
@@ -2598,7 +2594,7 @@ AS_HELP_STRING([--with-dpdk@<:@=DIR@:>@],[include DPDK support (located in direc
 		# User requested DPDK-only libpcap, so we'd better have
 		# the DPDK API.
 		want_dpdk=yes
-	elif test "xxx_only" = yes; then
+	elif test "$xxx_only" = yes; then
 		# User requested something-else-only pcap, so they don't
 		# want DPDK support.
 		want_dpdk=no
@@ -2785,7 +2781,7 @@ AC_ARG_ENABLE([bluetooth],
     [],
     [enable_bluetooth=ifsupportavailable])
 
-if test "xxx_only" = yes; then
+if test "$xxx_only" = yes; then
 	# User requested something-else-only pcap, so they don't
 	# want Bluetooth support.
 	enable_bluetooth=no
@@ -2868,7 +2864,7 @@ AC_ARG_ENABLE([dbus],
     [],
     [enable_dbus=ifavailable])
 
-if test "xxx_only" = yes; then
+if test "$xxx_only" = yes; then
 	# User requested something-else-only pcap, so they don't
 	# want D-Bus support.
 	enable_dbus=no
@@ -2951,7 +2947,7 @@ AC_ARG_ENABLE([rdma],
     [],
     [enable_rdma=ifavailable])
 
-if test "xxx_only" = yes; then
+if test "$xxx_only" = yes; then
 	# User requested something-else-only pcap, so they don't
 	# want RDMA support.
 	enable_rdma=no
